@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wumpus World – Logic Agent</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;700;800&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #161922;
+    --surface2: #1e2230;
+    --border: #2a2f3f;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --accent: #4ade80;
+    --danger: #f87171;
+    --warn: #fbbf24;
+    --info: #60a5fa;
+    --purple: #a78bfa;
+    --safe-glow: rgba(74,222,128,0.15);
+    --danger-glow: rgba(248,113,113,0.15);
+    --unknown-glow: rgba(96,165,250,0.05);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    background: var(--surface);
+  }
+
+  header h1 {
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  header h1 span { color: var(--accent); }
+
+  .badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.05em;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .grid-panel {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    border-right: 1px solid var(--border);
+  }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+  }
+
+  .controls label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .controls input[type=number] {
+    width: 52px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    outline: none;
+  }
+
+  .controls input[type=number]:focus { border-color: var(--accent); }
+
+  button {
+    font-family: 'Syne', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  button.primary {
+    background: var(--accent);
+    color: #0d1409;
+    border-color: var(--accent);
+  }
+
+  button.primary:hover { filter: brightness(1.1); }
+
+  button.secondary {
+    background: transparent;
+    color: var(--text);
+  }
+
+  button.secondary:hover { background: var(--surface2); }
+
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  #grid-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+  }
+
+  #grid {
+    display: inline-grid;
+    gap: 3px;
+    padding: 3px;
+    background: var(--border);
+    border-radius: 8px;
+  }
+
+  .cell {
+    width: 72px;
+    height: 72px;
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-family: 'JetBrains Mono', monospace;
+    position: relative;
+    transition: background 0.3s, box-shadow 0.3s;
+    cursor: default;
+    background: var(--surface);
+    color: var(--muted);
+  }
+
+  .cell.visited { background: #111827; }
+
+  .cell.safe {
+    background: var(--safe-glow);
+    border: 1px solid rgba(74,222,128,0.3);
+    color: var(--accent);
+  }
+
+  .cell.agent {
+    background: rgba(167,139,250,0.18);
+    border: 2px solid var(--purple);
+    color: var(--purple);
+  }
+
+  .cell.pit {
+    background: var(--danger-glow);
+    border: 1px solid rgba(248,113,113,0.4);
+    color: var(--danger);
+  }
+
+  .cell.wumpus {
+    background: rgba(251,191,36,0.12);
+    border: 1px solid rgba(251,191,36,0.4);
+    color: var(--warn);
+  }
+
+  .cell.dead {
+    background: rgba(248,113,113,0.25);
+    border: 2px solid var(--danger);
+  }
+
+  .cell.start { border: 1px solid rgba(96,165,250,0.3); }
+
+  .cell-icon { font-size: 1.4rem; line-height: 1; }
+  .cell-label { font-size: 0.5rem; color: var(--muted); margin-top: 2px; letter-spacing: 0.05em; }
+  .percept-icons {
+    position: absolute;
+    bottom: 3px;
+    left: 0; right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 2px;
+    font-size: 0.55rem;
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+  }
+
+  .sidebar-section {
+    border-bottom: 1px solid var(--border);
+    padding: 1rem;
+  }
+
+  .sidebar-section h3 {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 0.8rem;
+  }
+
+  .metric-row .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .metric-row .val.warn { color: var(--warn); }
+  .metric-row .val.info { color: var(--info); }
+  .metric-row .val.danger { color: var(--danger); }
+
+  .percept-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 24px;
+  }
+
+  .percept-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid;
+  }
+
+  .percept-tag.breeze { color: var(--info); border-color: rgba(96,165,250,0.4); background: rgba(96,165,250,0.08); }
+  .percept-tag.stench { color: var(--warn); border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.08); }
+  .percept-tag.glitter { color: var(--accent); border-color: rgba(74,222,128,0.4); background: rgba(74,222,128,0.08); }
+  .percept-tag.none { color: var(--muted); border-color: var(--border); }
+
+  .log {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    color: var(--muted);
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 3px;
+  }
+
+  .log-entry { line-height: 1.5; }
+  .log-entry.ok { color: var(--accent); }
+  .log-entry.warn { color: var(--warn); }
+  .log-entry.danger { color: var(--danger); }
+  .log-entry.info { color: var(--info); }
+
+  .legend {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .status-bar {
+    padding: 0.6rem 1.5rem;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    font-size: 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+  }
+
+  #status-msg { color: var(--text); font-weight: 600; }
+
+  .speed-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Wumpus World <span>Logic Agent</span></h1>
+  <span class="badge">KB · CNF · Resolution</span>
+  <span class="badge">Propositional Logic</span>
+</header>
+
+<div class="main">
+  <div class="grid-panel">
+    <div class="controls">
+      <label>Rows</label>
+      <input type="number" id="inp-rows" value="4" min="3" max="8">
+      <label>Cols</label>
+      <input type="number" id="inp-cols" value="4" min="3" max="8">
+      <label>Pits</label>
+      <input type="number" id="inp-pits" value="3" min="1" max="6">
+      <button class="primary" id="btn-new">New Episode</button>
+      <button class="secondary" id="btn-step" disabled>Step</button>
+      <button class="secondary" id="btn-run" disabled>Run Auto</button>
+      <button class="secondary" id="btn-pause" disabled>Pause</button>
+      <div class="speed-control">
+        <label>Speed</label>
+        <input type="range" id="inp-speed" min="100" max="1500" value="600" step="100" style="width:80px">
+      </div>
+    </div>
+    <div id="grid-wrapper"><div id="grid"></div></div>
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <h3>Metrics</h3>
+      <div class="metric-row"><span>Inference Steps</span><span class="val info" id="m-steps">0</span></div>
+      <div class="metric-row"><span>KB Clauses</span><span class="val" id="m-clauses">0</span></div>
+      <div class="metric-row"><span>Cells Visited</span><span class="val" id="m-visited">0</span></div>
+      <div class="metric-row"><span>Safe Deduced</span><span class="val" id="m-safe">0</span></div>
+      <div class="metric-row"><span>Agent Moves</span><span class="val" id="m-moves">0</span></div>
+      <div class="metric-row"><span>Status</span><span class="val warn" id="m-status">Idle</span></div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Current Percepts</h3>
+      <div class="percept-list" id="percept-list">
+        <span class="percept-tag none">—</span>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Agent Position</h3>
+      <div class="metric-row"><span>Row</span><span class="val" id="m-row">—</span></div>
+      <div class="metric-row"><span>Col</span><span class="val" id="m-col">—</span></div>
+      <div class="metric-row"><span>Gold Found</span><span class="val" id="m-gold">No</span></div>
+    </div>
+
+    <div class="sidebar-section" style="flex:1">
+      <h3>Agent Log</h3>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Legend</h3>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(167,139,250,0.4);border:1px solid var(--purple)"></div>Agent</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--safe-glow);border:1px solid rgba(74,222,128,0.3)"></div>Safe</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--danger-glow);border:1px solid rgba(248,113,113,0.3)"></div>Pit</div>
+        <div class="legend-item"><div class="legend-dot" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3)"></div>Wumpus</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#111827;border:1px solid var(--border)"></div>Visited</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--surface);border:1px solid var(--border)"></div>Unknown</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span id="status-msg">Ready — click New Episode to begin</span>
+  <span>🫧 Breeze = adjacent pit &nbsp;|&nbsp; 🌫 Stench = adjacent wumpus &nbsp;|&nbsp; ✨ Glitter = gold here</span>
+</div>
+
+<script>
+// ─── Knowledge Base & Resolution Engine ───────────────────────────────────────
+
+class KnowledgeBase {
+  constructor() {
+    this.clauses = new Set();
+    this.facts = new Set();
+    this.inferenceSteps = 0;
+  }
+
+  tell(clause) {
+    const key = [...clause].sort().join(',');
+    this.clauses.add(key);
+    if (clause.size === 1) {
+      const lit = [...clause][0];
+      this.facts.add(lit);
+    }
+  }
+
+  tellFact(lit) {
+    this.facts.add(lit);
+    this.tell(new Set([lit]));
+  }
+
+  // Convert KB to CNF (already in clause form) and add negation of query
+  // Resolution refutation: prove alpha by showing KB ∧ ¬alpha is unsatisfiable
+  ask(query) {
+    this.inferenceSteps++;
+    // Add negation of query as assumption
+    const negQuery = this._negate(query);
+    
+    // Build working set of clauses
+    const workingClauses = [];
+    for (const c of this.clauses) {
+      workingClauses.push(c.split(','));
+    }
+    workingClauses.push([negQuery]);
+
+    // Unit propagation first (fast path)
+    const result = this._resolve(workingClauses);
+    return result;
+  }
+
+  _negate(lit) {
+    return lit.startsWith('~') ? lit.slice(1) : '~' + lit;
+  }
+
+  _resolve(clauses) {
+    const clauseSet = clauses.map(c => new Set(c));
+    const seen = new Set(clauseSet.map(c => [...c].sort().join(',')));
+
+    for (let i = 0; i < clauseSet.length; i++) {
+      for (let j = i + 1; j < clauseSet.length; j++) {
+        this.inferenceSteps++;
+        const resolvents = this._resolvePair(clauseSet[i], clauseSet[j]);
+        for (const r of resolvents) {
+          if (r.size === 0) return true; // Empty clause → contradiction → query proved
+          const key = [...r].sort().join(',');
+          if (!seen.has(key)) {
+            seen.add(key);
+            clauseSet.push(r);
+            if (clauseSet.length > 400) return false; // Safety limit
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  _resolvePair(c1, c2) {
+    const resolvents = [];
+    for (const lit of c1) {
+      const neg = this._negate(lit);
+      if (c2.has(neg)) {
+        const newClause = new Set([...c1, ...c2]);
+        newClause.delete(lit);
+        newClause.delete(neg);
+        resolvents.push(newClause);
+      }
+    }
+    return resolvents;
+  }
+
+  countClauses() {
+    return this.clauses.size;
+  }
+
+  reset() {
+    this.clauses = new Set();
+    this.facts = new Set();
+    this.inferenceSteps = 0;
+  }
+}
+
+// ─── World Setup ──────────────────────────────────────────────────────────────
+
+let world = null;
+let autoTimer = null;
+
+class WumpusWorld {
+  constructor(rows, cols, numPits) {
+    this.rows = rows;
+    this.cols = cols;
+    this.grid = [];
+    this.agentPos = {r:0, c:0};
+    this.visited = new Set();
+    this.safeKnown = new Set();
+    this.frontierQueue = [];
+    this.kb = new KnowledgeBase();
+    this.moves = 0;
+    this.alive = true;
+    this.won = false;
+    this.goldFound = false;
+    this.revealedHazards = new Set();
+    this.log = [];
+
+    this._initGrid(numPits);
+    this._markSafe(0,0);
+    this._visit(0,0);
+  }
+
+  cellKey(r,c) { return `${r},${c}`; }
+
+  _initGrid(numPits) {
+    for (let r = 0; r < this.rows; r++) {
+      this.grid[r] = [];
+      for (let c = 0; c < this.cols; c++) {
+        this.grid[r][c] = { pit: false, wumpus: false, gold: false };
+      }
+    }
+    // Place wumpus (not at start)
+    let placed = false;
+    while (!placed) {
+      const r = Math.floor(Math.random() * this.rows);
+      const c = Math.floor(Math.random() * this.cols);
+      if (!(r===0 && c===0)) { this.grid[r][c].wumpus = true; placed = true; }
+    }
+    // Place pits
+    let p = 0;
+    const attempts = numPits * 20;
+    for (let a = 0; a < attempts && p < numPits; a++) {
+      const r = Math.floor(Math.random() * this.rows);
+      const c = Math.floor(Math.random() * this.cols);
+      if (!(r===0 && c===0) && !this.grid[r][c].pit && !this.grid[r][c].wumpus) {
+        this.grid[r][c].pit = true; p++;
+      }
+    }
+    // Place gold
+    let gp = false;
+    while (!gp) {
+      const r = Math.floor(Math.random() * this.rows);
+      const c = Math.floor(Math.random() * this.cols);
+      if (!(r===0 && c===0)) { this.grid[r][c].gold = true; gp = true; }
+    }
+  }
+
+  _adj(r,c) {
+    const res = [];
+    if (r>0) res.push({r:r-1,c});
+    if (r<this.rows-1) res.push({r:r+1,c});
+    if (c>0) res.push({r,c:c-1});
+    if (c<this.cols-1) res.push({r,c:c+1});
+    return res;
+  }
+
+  _percepts(r,c) {
+    const p = {breeze:false, stench:false, glitter:false};
+    if (this.grid[r][c].gold) p.glitter = true;
+    for (const {r:ar, c:ac} of this._adj(r,c)) {
+      if (this.grid[ar][ac].pit) p.breeze = true;
+      if (this.grid[ar][ac].wumpus) p.stench = true;
+    }
+    return p;
+  }
+
+  _markSafe(r,c) {
+    const k = this.cellKey(r,c);
+    if (!this.safeKnown.has(k)) {
+      this.safeKnown.add(k);
+      this.kb.tellFact(`~P_${r}_${c}`);
+      this.kb.tellFact(`~W_${r}_${c}`);
+    }
+  }
+
+  _visit(r,c) {
+    const k = this.cellKey(r,c);
+    if (this.visited.has(k)) return;
+    this.visited.add(k);
+
+    const p = this._percepts(r,c);
+    this.currentPercepts = p;
+
+    // Tell KB about percepts
+    const adj = this._adj(r,c);
+    const adjPits = adj.map(({r:ar,c:ac})=>`P_${ar}_${ac}`);
+    const adjWumpi = adj.map(({r:ar,c:ac})=>`W_${ar}_${ac}`);
+
+    if (p.breeze) {
+      // B_(r,c) => disjunction of pits in adj cells (CNF biconditional expansion)
+      if (adjPits.length > 0) {
+        this.kb.tell(new Set(adjPits));
+        // Also: each adj can be pit
+        for (const lit of adjPits) {
+          this.kb.tell(new Set([`~P_${r}_${c}_breeze`, lit]));
+        }
+      }
+      this.kb.tellFact(`B_${r}_${c}`);
+    } else {
+      // No breeze ⇒ all adjacent cells have no pit
+      this.kb.tellFact(`~B_${r}_${c}`);
+      for (const {r:ar,c:ac} of adj) { this._markSafe(ar,ac); }
+    }
+
+    if (p.stench) {
+      if (adjWumpi.length > 0) this.kb.tell(new Set(adjWumpi));
+      this.kb.tellFact(`S_${r}_${c}`);
+    } else {
+      this.kb.tellFact(`~S_${r}_${c}`);
+      for (const {r:ar,c:ac} of adj) {
+        this.kb.tellFact(`~W_${ar}_${ac}`);
+      }
+    }
+
+    if (p.glitter) {
+      this.goldFound = true;
+      this._log(`✨ Gold found at (${r},${c})!`, 'ok');
+    }
+
+    // Mark self safe (we're here, we know)
+    this._markSafe(r,c);
+
+    // Propagate: any neighbor we've proved not-pit and not-wumpus is safe
+    for (const {r:ar,c:ac} of adj) {
+      const ak = this.cellKey(ar,ac);
+      if (!this.safeKnown.has(ak)) {
+        const pitProved = this.kb.ask(`~P_${ar}_${ac}`);
+        const wumpusProved = this.kb.ask(`~W_${ar}_${ac}`);
+        if (pitProved && wumpusProved) {
+          this._markSafe(ar,ac);
+          this._log(`KB proved (${ar},${ac}) is safe`, 'info');
+        }
+      }
+    }
+
+    // Add unvisited safe neighbors to frontier
+    for (const {r:ar,c:ac} of adj) {
+      const ak = this.cellKey(ar,ac);
+      if (this.safeKnown.has(ak) && !this.visited.has(ak)) {
+        if (!this.frontierQueue.find(x=>x.r===ar&&x.c===ac)) {
+          this.frontierQueue.push({r:ar,c:ac});
+        }
+      }
+    }
+  }
+
+  step() {
+    if (!this.alive || this.won) return false;
+
+    // Check if we have a safe unvisited frontier
+    if (this.frontierQueue.length > 0) {
+      const next = this.frontierQueue.shift();
+      this.agentPos = {r:next.r, c:next.c};
+      this.moves++;
+      this._log(`Move to (${next.r},${next.c})`, 'ok');
+
+      if (this.grid[next.r][next.c].pit) {
+        this.alive = false;
+        this.revealedHazards.add(this.cellKey(next.r,next.c));
+        this._log(`💀 Fell into pit at (${next.r},${next.c})!`, 'danger');
+        return false;
+      }
+      if (this.grid[next.r][next.c].wumpus) {
+        this.alive = false;
+        this.revealedHazards.add(this.cellKey(next.r,next.c));
+        this._log(`💀 Eaten by Wumpus at (${next.r},${next.c})!`, 'danger');
+        return false;
+      }
+
+      this._visit(next.r, next.c);
+
+      if (this.goldFound) {
+        this.won = true;
+        this._log(`🏆 Agent grabbed gold and wins!`, 'ok');
+        return false;
+      }
+      return true;
+    } else {
+      // No safe frontier — try any unvisited adjacent we can prove safe
+      const {r,c} = this.agentPos;
+      const adj = this._adj(r,c);
+      for (const {r:ar,c:ac} of adj) {
+        const ak = this.cellKey(ar,ac);
+        if (!this.visited.has(ak)) {
+          const pitSafe = this.kb.ask(`~P_${ar}_${ac}`);
+          const wumpusSafe = this.kb.ask(`~W_${ar}_${ac}`);
+          if (pitSafe && wumpusSafe) {
+            this._markSafe(ar,ac);
+            this.frontierQueue.push({r:ar,c:ac});
+            this._log(`Resolution proved (${ar},${ac}) safe`, 'info');
+            return this.step();
+          }
+        }
+      }
+      this._log('No safe moves deducible — agent stops.', 'warn');
+      return false;
+    }
+  }
+
+  _log(msg, type='') {
+    this.log.unshift({msg, type});
+    if (this.log.length > 100) this.log.pop();
+  }
+
+  isFinished() {
+    return !this.alive || this.won || this.frontierQueue.length===0;
+  }
+}
+
+// ─── Rendering ────────────────────────────────────────────────────────────────
+
+function renderGrid() {
+  if (!world) return;
+  const gridEl = document.getElementById('grid');
+  const {rows, cols} = world;
+  gridEl.style.gridTemplateColumns = `repeat(${cols}, 72px)`;
+  gridEl.innerHTML = '';
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const k = world.cellKey(r,c);
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+
+      const isAgent = world.agentPos.r===r && world.agentPos.c===c;
+      const isVisited = world.visited.has(k);
+      const isSafe = world.safeKnown.has(k);
+      const isRevealed = world.revealedHazards.has(k);
+      const isStart = r===0 && c===0;
+
+      let icon = '';
+      let label = '';
+
+      if (isAgent && !world.alive) {
+        cell.classList.add('dead');
+        icon = '💀'; label = 'DEAD';
+      } else if (isAgent) {
+        cell.classList.add('agent');
+        icon = '🤖'; label = `(${r},${c})`;
+      } else if (isRevealed && world.grid[r][c].pit) {
+        cell.classList.add('pit');
+        icon = '🕳️'; label = 'PIT';
+      } else if (isRevealed && world.grid[r][c].wumpus) {
+        cell.classList.add('wumpus');
+        icon = '👾'; label = 'WUMPUS';
+      } else if (isVisited) {
+        cell.classList.add('visited');
+        label = `(${r},${c})`;
+        // Show gold symbol if found here
+        if (world.grid[r][c].gold && world.goldFound) { icon = '✨'; label = 'GOLD'; }
+      } else if (isSafe) {
+        cell.classList.add('safe');
+        icon = '✓'; label = 'SAFE';
+      } else {
+        label = '?';
+      }
+
+      if (isStart && !isAgent) cell.classList.add('start');
+
+      cell.innerHTML = `<div class="cell-icon">${icon}</div><div class="cell-label">${label}</div>`;
+
+      // Percept indicators for visited cells
+      if (isVisited && !isAgent) {
+        const p = world._percepts(r,c);
+        const icons = [];
+        if (p.breeze) icons.push('<span style="color:#60a5fa">🫧</span>');
+        if (p.stench) icons.push('<span style="color:#fbbf24">🌫</span>');
+        if (p.glitter) icons.push('<span style="color:#4ade80">✨</span>');
+        if (icons.length) {
+          const pd = document.createElement('div');
+          pd.className = 'percept-icons';
+          pd.innerHTML = icons.join('');
+          cell.appendChild(pd);
+        }
+      }
+
+      gridEl.appendChild(cell);
+    }
+  }
+}
+
+function renderSidebar() {
+  if (!world) return;
+  const p = world.currentPercepts || {breeze:false, stench:false, glitter:false};
+
+  document.getElementById('m-steps').textContent = world.kb.inferenceSteps;
+  document.getElementById('m-clauses').textContent = world.kb.countClauses();
+  document.getElementById('m-visited').textContent = world.visited.size;
+  document.getElementById('m-safe').textContent = world.safeKnown.size;
+  document.getElementById('m-moves').textContent = world.moves;
+  document.getElementById('m-row').textContent = world.agentPos.r;
+  document.getElementById('m-col').textContent = world.agentPos.c;
+  document.getElementById('m-gold').textContent = world.goldFound ? 'Yes ✨' : 'No';
+
+  const statusEl = document.getElementById('m-status');
+  if (!world.alive) { statusEl.textContent = 'Dead'; statusEl.className = 'val danger'; }
+  else if (world.won) { statusEl.textContent = 'Won!'; statusEl.className = 'val ok'; }
+  else { statusEl.textContent = 'Running'; statusEl.className = 'val warn'; }
+
+  const pl = document.getElementById('percept-list');
+  pl.innerHTML = '';
+  if (!p.breeze && !p.stench && !p.glitter) {
+    pl.innerHTML = '<span class="percept-tag none">None</span>';
+  } else {
+    if (p.breeze) pl.innerHTML += '<span class="percept-tag breeze">🫧 Breeze</span>';
+    if (p.stench) pl.innerHTML += '<span class="percept-tag stench">🌫 Stench</span>';
+    if (p.glitter) pl.innerHTML += '<span class="percept-tag glitter">✨ Glitter</span>';
+  }
+
+  const logEl = document.getElementById('log');
+  logEl.innerHTML = world.log.map(({msg,type})=>
+    `<div class="log-entry ${type}">${msg}</div>`
+  ).join('');
+
+  const statusMsg = document.getElementById('status-msg');
+  if (!world.alive) statusMsg.textContent = '❌ Agent is dead.';
+  else if (world.won) statusMsg.textContent = '🏆 Agent found the gold!';
+  else statusMsg.textContent = `Agent at (${world.agentPos.r}, ${world.agentPos.c}) — ${world.frontierQueue.length} safe moves in queue`;
+}
+
+function render() {
+  renderGrid();
+  renderSidebar();
+}
+
+// ─── Controls ─────────────────────────────────────────────────────────────────
+
+document.getElementById('btn-new').addEventListener('click', () => {
+  stopAuto();
+  const rows = Math.max(3, Math.min(8, parseInt(document.getElementById('inp-rows').value)||4));
+  const cols = Math.max(3, Math.min(8, parseInt(document.getElementById('inp-cols').value)||4));
+  const pits = Math.max(1, Math.min(6, parseInt(document.getElementById('inp-pits').value)||3));
+  world = new WumpusWorld(rows, cols, pits);
+  document.getElementById('btn-step').disabled = false;
+  document.getElementById('btn-run').disabled = false;
+  render();
+  document.getElementById('status-msg').textContent = `New ${rows}×${cols} world with ${pits} pits — agent at (0,0)`;
+});
+
+document.getElementById('btn-step').addEventListener('click', () => {
+  if (!world) return;
+  const cont = world.step();
+  render();
+  if (!cont) {
+    document.getElementById('btn-step').disabled = true;
+    document.getElementById('btn-run').disabled = true;
+  }
+});
+
+function stopAuto() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
+  document.getElementById('btn-run').disabled = world ? false : true;
+  document.getElementById('btn-pause').disabled = true;
+}
+
+document.getElementById('btn-run').addEventListener('click', () => {
+  if (!world) return;
+  const speed = parseInt(document.getElementById('inp-speed').value)||600;
+  const delay = 1600 - speed;
+  document.getElementById('btn-run').disabled = true;
+  document.getElementById('btn-pause').disabled = false;
+  autoTimer = setInterval(() => {
+    const cont = world.step();
+    render();
+    if (!cont) stopAuto();
+  }, delay);
+});
+
+document.getElementById('btn-pause').addEventListener('click', stopAuto);
+</script>
+</body>
+</html>
